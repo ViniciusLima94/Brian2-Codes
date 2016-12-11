@@ -14,13 +14,20 @@ defaultclock.dt = 0.1*ms
 
 tsim = 1*second
 
+N = 80000 # Total population
+# Fraction of neurons in each layer
+#       2/3e   2/3i   4e     4i     5e     5i     6e     6i
+frac = [.2680, .0756, .2840, .0710, .0628, .0138, .1866, .0382 ]
+
 #Number of neurons per layer
-#          2/3e   2/3i  4e     4i    5e    5i    6e     6i
-n_layer = [20683, 5834, 21915, 5479, 4850, 1065, 14395, 2948]
-#
+n_layer = [size*f for f in frac]
+n_layer = [round(n_pop) for n_pop in n_layer]
+# Reescale factor
+rf = 80000.0 / N 
 nn_cum = cumsum(n_layer)
 # Background number per layer
 bg_layer = [1600, 1500 ,2100, 1900, 2000, 1900, 2900, 1850]
+bg_layer = [bg_pop/rf for bg_pop in bg_layer]   # Reescaling
 # Prob. connection table
 
 table = [[0.1009,  0.1689, 0.0437, 0.0818, 0.0323, 0.,     0.0076, 0.    ],
@@ -37,8 +44,8 @@ std_d_ex = 0.75*ms # Std. Excitatory delay
 d_in = 0.8*ms      # Inhibitory delay
 std_d_in = 0.4*ms  # Std. Inhibitory delay
 
-w_ex = .35*mV        # Excitatory weight
-std_w_ex = .0352*mV  # Standar deviation weigth
+w_ex = rf*.35*mV        # Excitatory weight
+std_w_ex = rf*.0352*mV  # Standar deviation weigth
 g = -4.0             # Inhibitory weight balance
 
 # Neuron model parameters
