@@ -20,7 +20,7 @@ N = 80000 # Total population
 frac = [.2680, .0756, .2840, .0710, .0628, .0138, .1866, .0382 ]
 
 #Number of neurons per layer
-n_layer = [size*f for f in frac]
+n_layer = [N*f for f in frac]
 n_layer = [round(n_pop) for n_pop in n_layer]
 # Reescale factor
 rf = 80000.0 / N 
