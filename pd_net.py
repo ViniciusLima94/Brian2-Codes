@@ -4,36 +4,48 @@ from brian2 import *
 import numpy as np
 #set_device('genn')
 
+import matplotlib
+matplotlib.use('Agg')
+
+set_device('cpp_standalone', directory='PD')
+prefs.devices.cpp_standalone.openmp_threads = 8
+
+defaultclock.dt = 0.1*ms
+
 tsim = 1*second
 
 #Number of neurons per layer
 #          2/3e   2/3i  4e     4i    5e    5i    6e     6i
 n_layer = [20683, 5834, 21915, 5479, 4850, 1065, 14395, 2948]
+#
+nn_cum = cumsum(n_layer)
 # Background number per layer
 bg_layer = [1600, 1500 ,2100, 1900, 2000, 1900, 2900, 1850]
 # Prob. connection table
 
-table = np.array([
-		[ 0.101,	0.169,	0.044,	0.082,	0.032,	0.0,	0.008,	0.0 ],
-		[ 0.135,	0.137,	0.032,	0.052,	0.075,	0.0,    0.004,	0.0 ],
-		[ 0.008,	0.006,	0.050,	0.135,	0.007,	0.0003,	0.045,	0.0 ],
-		[ 0.069,	0.003,	0.079,	0.160,	0.003,	0.0,	0.106,	0.0 ],
-		[ 0.100,	0.062,	0.051,	0.006,	0.083,	0.373,	0.020,	0.0 ],
-		[ 0.055,	0.027,	0.026,	0.002,	0.060,	0.316,	0.009,	0.0 ],
-		[ 0.016,	0.007,	0.021,	0.017,	0.057,	0.020,	0.040,	0.225 ],
-		[ 0.036,	0.001,	0.003,	0.001,	0.028,	0.008,	0.066,	0.144 ], ])
+table = [[0.1009,  0.1689, 0.0437, 0.0818, 0.0323, 0.,     0.0076, 0.    ],
+        [0.1346,   0.1371, 0.0316, 0.0515, 0.0755, 0.,     0.0042, 0.    ],
+        [0.0077,   0.0059, 0.0497, 0.135,  0.0067, 0.0003, 0.0453, 0.    ],
+        [0.0691,   0.0029, 0.0794, 0.1597, 0.0033, 0.,     0.1057, 0.    ],
+        [0.1004,   0.0622, 0.0505, 0.0057, 0.0831, 0.3726, 0.0204, 0.    ],
+        [0.0548,   0.0269, 0.0257, 0.0022, 0.06,   0.3158, 0.0086, 0.    ],
+        [0.0156,   0.0066, 0.0211, 0.0166, 0.0572, 0.0197, 0.0396, 0.2252],
+        [0.0364,   0.001,  0.0034, 0.0005, 0.0277, 0.008,  0.0658, 0.144 ]]
 
-d_ex = 1.5*ms   # Excitatory delay
-d_in = 0.8*ms   # Inhibitory delay
+d_ex = 1.5*ms      # Excitatory delay
+std_d_ex = 0.75*ms # Std. Excitatory delay
+d_in = 0.8*ms      # Inhibitory delay
+std_d_in = 0.4*ms  # Std. Inhibitory delay
 
-w_ex = 0.15*mV#87.8*pA  # Excitatory weight
-g = -4.0        # Inhibitory weight balance
+w_ex = .35*mV        # Excitatory weight
+std_w_ex = .0352*mV  # Standar deviation weigth
+g = -4.0             # Inhibitory weight balance
 
 # Neuron model parameters
 tau_m   = 10.0*ms   # Membrane time constant
 tau_ref = 2.0*ms    # Absolute refractory period
 tau_syn = 0.5*ms    # Post-synaptic current time constant
-R       = 40*Mohm    # Membrane capacity 
+R       = 40*Mohm   # Membrane capacity 
 v_r     = -65*mV    # Reset potential
 v_th    = -50*mV    # Threshold potential
 
@@ -42,37 +54,41 @@ eqs = '''
 	I : amp
 '''
 
+neurons = NeuronGroup(sum(n_layer), eqs, threshold='v>v_th', reset='v=v_r', method='euler', refractory=tau_ref)
+neurons.v = 'rand()*(v_th-v_r) + v_r'
+neurons.I = 0.0*pA
+
 p = [] # Stores NeuronGroups, one for each population
 
 for r in range(0, 8):
-	# Addin
-	p.append( NeuronGroup(n_layer[r], eqs, threshold='v > v_th', reset = 'v = v_r', method='euler', refractory=tau_ref) )
-	p[r].v = v_r # Initialize membrane potencial
-	p[r].I = 0.0*pA
+	if r == 0:
+		p.append(neurons[:nn_cum[0]])
+	else:
+		p.append(neurons[nn_cum[r-1]:nn_cum[r]])
 
 # Creatting connections
-con = [] # Stores connectiosn
-for r in range(0, 8):
-	for c in range(0, 8):
-		if r%2 == 0:
-			w = w_ex
-			d = d_ex
-		else:
-			w = g*w_ex
-			d = d_in
+con = [] # Stores connections
 
-		con.append( Synapses(p[r], p[c], on_pre='v_post += w') )
-		if r == c:
-			con[c+8*r].connect(condition='i!=j', p=table[r][c])
+for c in range(0, 8):
+	for r in range(0, 8):
+		# Excitatory layer
+		if (c % 2) == 0:
+			if c == 2 and r == 0:
+				con.append( Synapses(p[c],p[r], on_pre = 'v_post += 2*(w_ex + std_w_ex*randn())') )
+			else:
+				con.append( Synapses(p[c],p[r], on_pre = 'v_post += (w_ex + std_w_ex*randn())') )
+			con[-1].connect(condition='i!=j', p=table[r][c])	
+			con[-1].delay = '(d_ex + std_d_ex*randn())'
+		# Inhibitory layer	
 		else:
-			con[c+8*r].connect(p=table[r][c])
-		con[c+8*r].delay = d
-
+			con.append( Synapses(p[c],p[r], on_pre = 'v_post += g*(w_ex + std_w_ex*randn())') )
+                        con[-1].connect(condition='i!=j', p=table[r][c])
+			con[-1].delay = '(d_in + std_d_in*randn())'
 
 # Creanting BG inputs
 bg_in  = []
 for r in range(0, 8):
-	bg_in.append( PoissonInput(p[r], 'v', bg_layer[r], 8*Hz, weight=w_ex ) )
+	bg_in.append( PoissonInput(p[r], 'v', bg_layer[r], 8*Hz, weight = w_ex ) )
 
 # Creating Spike Monitors
 spikemon = []
@@ -89,9 +105,19 @@ f_5i  = spikemon[5].count;
 f_6e  = spikemon[6].count;
 f_6i  = spikemon[7].count;
 
-#run(tsim,report='stdout')
+smon_net = SpikeMonitor(neurons)
+
+net = Network(collect())
+net.add(neurons,p, con, spikemon, bg_in)
+net.run(tsim,report='stdout')
 
 print mean(f_23e), mean(f_23i), mean(f_4e), mean(f_4i), mean(f_5e), mean(f_5i), mean(f_6e), mean(f_6i) 
 
-plot(spikemon[0].t/ms, spikemon[0].i,'.k')
+plot(smon_net.t/ms, smon_net.i,'.k')
+xlabel('Time (ms)')
+ylabel('Neuron index');
+ylim(0,sum(n_layer))
+xlim(500,1000)
+plt.gca().invert_yaxis()
+savefig('raster_PDnet.png')
 show()
