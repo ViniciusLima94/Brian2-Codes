@@ -7,12 +7,12 @@ import numpy as np
 import matplotlib
 matplotlib.use('Agg')
 
-set_device('cpp_standalone', directory='PD')
-prefs.devices.cpp_standalone.openmp_threads = 8
+#set_device('cpp_standalone', directory='PD')
+#prefs.devices.cpp_standalone.openmp_threads = 8
 
 defaultclock.dt = 0.1*ms
 
-tsim = 5*second
+tsim = 1*second
 
 N = 80000 # Total population
 # Fraction of neurons in each layer
@@ -23,7 +23,7 @@ frac = [.2680, .0756, .2840, .0710, .0628, .0138, .1866, .0382 ]
 n_layer = [N*f for f in frac]
 n_layer = [int(round(n_pop)) for n_pop in n_layer]
 # Reescale factor
-rf = 80000.0 / N 
+rf = 80000.0 / N
 nn_cum = cumsum(n_layer)
 # Background number per layer
 bg_layer = [1600, 1500 ,2100, 1900, 2000, 1900, 2900, 1850]
@@ -45,14 +45,14 @@ d_in = 0.8*ms      # Inhibitory delay
 std_d_in = 0.4*ms  # Std. Inhibitory delay
 
 w_ex = rf*.3512*mV      # Excitatory weight
-std_w_ex = rf*.0352*mV  # Standar deviation weigth
+std_w_ex = rf*.0352*mV  # Standard deviation weigth
 g = 4.0                 # Inhibitory weight balance
 
 # Neuron model parameters
 tau_m   = 10.0*ms   # Membrane time constant
 tau_ref = 2.0*ms    # Absolute refractory period
 tau_syn = 0.5*ms    # Post-synaptic current time constant
-R       = 40*Mohm   # Membrane capacity 
+R       = 40*Mohm   # Membrane capacity
 v_r     = -65*mV    # Reset potential
 v_th    = -50*mV    # Threshold potential
 
@@ -73,29 +73,29 @@ for r in range(0, 8):
 	else:
 		p.append(neurons[nn_cum[r-1]:nn_cum[r]])
 
-# Creatting connections
+# Creating connections
 con = [] # Stores connections
 for c in range(0, 8):
-	for r in range(0, 8):
-		# Excitatory layer
-		if (c % 2) == 0:	
-			if c == 2 and r == 0:
-				con.append( Synapses(p[c],p[r], """ w:volt """,on_pre = 'v_post += 2*w') )
-				con[-1].connect(condition='i!=j', p=table[r][c])
-				con[-1].w = 'abs(w_ex + std_w_ex*randn())'
-			else:
-				con.append( Synapses(p[c],p[r], """ w:volt """,on_pre = 'v_post += w') )
-				con[-1].connect(condition='i!=j', p=table[r][c])
-				con[-1].w = 'abs(w_ex + std_w_ex*randn())'
-			con[-1].delay = 'abs(d_ex + std_d_ex*randn())'
-		# Inhibitory layer		
-		else:
-			con.append( Synapses(p[c],p[r], """ w:volt """,on_pre = 'v_post -= g*w') )
-			con[-1].connect(condition='i!=j', p=table[r][c])
-			con[-1].w = 'abs(w_ex + std_w_ex*randn())'
-           		con[-1].delay = 'abs(d_in + std_d_in*randn())'
-			
-# Creanting BG inputs
+    for r in range(0, 8):
+        # Excitatory layer
+        if (c % 2) == 0:
+            if c == 2 and r == 0:
+                con.append( Synapses(p[c],p[r], """ w:volt """,on_pre = 'v_post += 2*w') )
+                con[-1].connect(condition='i!=j', p=table[r][c])
+                con[-1].w = 'clip((w_ex + std_w_ex*randn()),w_ex*0.1, w_ex*10.0)'
+            else:
+                con.append( Synapses(p[c],p[r], """ w:volt """,on_pre = 'v_post += w') )
+                con[-1].connect(condition='i!=j', p=table[r][c])
+                con[-1].w = 'clip((w_ex + std_w_ex*randn()),w_ex*0.1, w_ex*10.0)'
+            con[-1].delay = 'clip(d_ex + std_d_ex*randn(),0,d_ex*10)'
+        # Inhibitory layer
+        else:
+            con.append( Synapses(p[c],p[r], """ w:volt """,on_pre = 'v_post -= g*w') )
+            con[-1].connect(condition='i!=j', p=table[r][c])
+            con[-1].w = 'clip((w_ex + std_w_ex*randn()),w_ex*0.1, w_ex*10.0)'
+            con[-1].delay = 'clip(d_in + std_d_in*randn(),0,d_in*10)'
+
+# Creating BG inputs
 bg_in  = []
 for r in range(0, 8):
 	bg_in.append( PoissonInput(p[r], 'v', bg_layer[r], 8*Hz, weight = w_ex ) )
@@ -121,8 +121,37 @@ net = Network(collect())
 net.add(neurons,p, con, spikemon, bg_in)
 net.run(tsim,report='stdout')
 
+subplot(2,1,1)
+plot(smon_net.t/ms, smon_net.i,'.k')
+xlabel('Time (ms)')
+ylabel('Neuron index');
+ylim(0,sum(n_layer))
+xlim(500,1000)
+plt.gca().invert_yaxis()
+#savefig('raster_PDnet.png')
+#show()
+
+freqs = []
+freqs.append(mean(f_23e))
+freqs.append(mean(f_23i))
+freqs.append(mean(f_4e))
+freqs.append(mean(f_4i))
+freqs.append(mean(f_5e))
+freqs.append(mean(f_5i))
+freqs.append(mean(f_6e))
+freqs.append(mean(f_6i))
+
+ind = np.arange(8)
+subplot(2,1,2)
+bar(ind, freqs)
+show()
+
+savefig('raster_PDnet.png')
+
+
+'''
 # Saving some values in files
-# Frequences 
+# Frequences
 f1 = open('fperlayer.dat', 'w')
 f1.write(str(mean(f_23e)))
 f1.write("\n")
@@ -178,12 +207,4 @@ f3.close()
 f4.close()
 f5.close()
 f6.close()
-
-# plot(smon_net.t/ms, smon_net.i,'.k')
-# xlabel('Time (ms)')
-# ylabel('Neuron index');
-# ylim(0,sum(n_layer))
-# xlim(500,1000)
-# plt.gca().invert_yaxis()
-# savefig('raster_PDnet.png')
-# show()
+'''
