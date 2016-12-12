@@ -1,14 +1,14 @@
 # Potjans & Diesmann cortical microcircuit model implemented on Brian2.
 
+import matplotlib
+matplotlib.use('Agg')
+
 from brian2 import *
 import numpy as np
 #set_device('genn')
 
-import matplotlib
-matplotlib.use('Agg')
-
-#set_device('cpp_standalone', directory='PD')
-#prefs.devices.cpp_standalone.openmp_threads = 8
+set_device('cpp_standalone', directory='PD')
+prefs.devices.cpp_standalone.openmp_threads = 4
 
 defaultclock.dt = 0.1*ms
 
@@ -41,12 +41,16 @@ table = [[0.1009,  0.1689, 0.0437, 0.0818, 0.0323, 0.,     0.0076, 0.    ],
 
 d_ex = 1.5*ms      # Excitatory delay
 std_d_ex = 0.75*ms # Std. Excitatory delay
-d_in = 0.8*ms      # Inhibitory delay
+d_in = 0.75*ms      # Inhibitory delay
 std_d_in = 0.4*ms  # Std. Inhibitory delay
 
-w_ex = rf*.3512*mV      # Excitatory weight
+w_ex = rf*.35*mV      # Excitatory weight
 std_w_ex = rf*.0352*mV  # Standard deviation weigth
 g = 4.0                 # Inhibitory weight balance
+
+# Initial potential
+v0 = -58*mV
+std_v0 = 10*mV
 
 # Neuron model parameters
 tau_m   = 10.0*ms   # Membrane time constant
@@ -61,8 +65,8 @@ eqs = '''
 	I : amp
 '''
 
-neurons = NeuronGroup(sum(n_layer), eqs, threshold='v>v_th', reset='v=v_r', method='euler', refractory=tau_ref)
-neurons.v = 'rand()*(v_th-v_r) + v_r'
+neurons = NeuronGroup(sum(n_layer), eqs, threshold='v>v_th', reset='v=v_r', method='linear', refractory=tau_ref)
+neurons.v = 'v0 + std_v0*randn()'
 neurons.I = 0.0*pA
 
 p = [] # Stores NeuronGroups, one for each population
@@ -121,90 +125,27 @@ net = Network(collect())
 net.add(neurons,p, con, spikemon, bg_in)
 net.run(tsim,report='stdout')
 
-subplot(2,1,1)
-plot(smon_net.t/ms, smon_net.i,'.k')
+# Raster plot
+plot(smon_net.t/ms, smon_net.i,'.k', markersize=0.5)
 xlabel('Time (ms)')
 ylabel('Neuron index');
 ylim(0,sum(n_layer))
 xlim(500,1000)
 plt.gca().invert_yaxis()
-#savefig('raster_PDnet.png')
-#show()
+savefig('raster_PDnet.png',dpi=300)
+close()
 
 freqs = []
-freqs.append(mean(f_23e))
-freqs.append(mean(f_23i))
-freqs.append(mean(f_4e))
-freqs.append(mean(f_4i))
-freqs.append(mean(f_5e))
-freqs.append(mean(f_5i))
-freqs.append(mean(f_6e))
-freqs.append(mean(f_6i))
+freqs.append(mean(f_23e)/tsim)
+freqs.append(mean(f_23i)/tsim)
+freqs.append(mean(f_4e)/tsim)
+freqs.append(mean(f_4i)/tsim)
+freqs.append(mean(f_5e)/tsim)
+freqs.append(mean(f_5i)/tsim)
+freqs.append(mean(f_6e)/tsim)
+freqs.append(mean(f_6i)/tsim)
 
+# Ploting frequencies by layer
 ind = np.arange(8)
-subplot(2,1,2)
 bar(ind, freqs)
-show()
-
-savefig('raster_PDnet.png')
-
-
-'''
-# Saving some values in files
-# Frequences
-f1 = open('fperlayer.dat', 'w')
-f1.write(str(mean(f_23e)))
-f1.write("\n")
-f1.write(str(mean(f_23i)))
-f1.write("\n")
-f1.write(str(mean(f_4e)))
-f1.write("\n")
-f1.write(str(mean(f_4i)))
-f1.write("\n")
-f1.write(str(mean(f_5e)))
-f1.write("\n")
-f1.write(str(mean(f_5i)))
-f1.write("\n")
-f1.write(str(mean(f_6e)))
-f1.write("\n")
-f1.write(str(mean(f_6i)))
-
-# Saving some excitatory weights
-f2 = open('wex.dat', 'w')
-for wex in con[0].w[:5000]:
-	f2.write(str(wex/mV))
-	f2.write("\n")
-
-# Saving some inhibitory weights
-f3 = open('win.dat', 'w')
-for win in con[-1].w[:5000]:
-	f3.write(str(win/mV))
-	f3.write("\n")
-
-# Saving some excitatory delays
-f4 = open('dex.dat', 'w')
-for dex in con[0].delay[:5000]:
-	f4.write(str(dex/ms))
-	f4.write("\n")
-
-# Saving some inhibitory delays
-f5 = open('din.dat', 'w')
-for din in con[-1].delay[:5000]:
-	f5.write(str(din/ms))
-	f5.write("\n")
-
-# Saving raster plot
-f6 = open('raster.dat', 'w')
-for idx in range(0, len(smon_net.t)):
-	f6.write(str(smon_net.t[idx]/ms))
-	f6.write("\t")
-	f6.write(str(smon_net.i[idx]))
-	f6.write("\n")
-
-f1.close()
-f2.close()
-f3.close()
-f4.close()
-f5.close()
-f6.close()
-'''
+savefig('freqs_PDnet.png', dpi=300)
