@@ -12,7 +12,7 @@ prefs.devices.cpp_standalone.openmp_threads = 8
 
 defaultclock.dt = 0.1*ms
 
-tsim = 1*second
+tsim = 5*second
 
 N = 80000 # Total population
 # Fraction of neurons in each layer
@@ -21,7 +21,7 @@ frac = [.2680, .0756, .2840, .0710, .0628, .0138, .1866, .0382 ]
 
 #Number of neurons per layer
 n_layer = [N*f for f in frac]
-n_layer = [round(n_pop) for n_pop in n_layer]
+n_layer = [int(round(n_pop)) for n_pop in n_layer]
 # Reescale factor
 rf = 80000.0 / N 
 nn_cum = cumsum(n_layer)
@@ -44,9 +44,9 @@ std_d_ex = 0.75*ms # Std. Excitatory delay
 d_in = 0.8*ms      # Inhibitory delay
 std_d_in = 0.4*ms  # Std. Inhibitory delay
 
-w_ex = rf*.35*mV        # Excitatory weight
+w_ex = rf*.3512*mV      # Excitatory weight
 std_w_ex = rf*.0352*mV  # Standar deviation weigth
-g = -4.0             # Inhibitory weight balance
+g = 4.0                 # Inhibitory weight balance
 
 # Neuron model parameters
 tau_m   = 10.0*ms   # Membrane time constant
@@ -75,23 +75,26 @@ for r in range(0, 8):
 
 # Creatting connections
 con = [] # Stores connections
-
 for c in range(0, 8):
 	for r in range(0, 8):
 		# Excitatory layer
-		if (c % 2) == 0:
+		if (c % 2) == 0:	
 			if c == 2 and r == 0:
-				con.append( Synapses(p[c],p[r], on_pre = 'v_post += 2*(w_ex + std_w_ex*randn())') )
+				con.append( Synapses(p[c],p[r], """ w:volt """,on_pre = 'v_post += 2*w') )
+				con[-1].connect(condition='i!=j', p=table[r][c])
+				con[-1].w = 'abs(w_ex + std_w_ex*randn())'
 			else:
-				con.append( Synapses(p[c],p[r], on_pre = 'v_post += (w_ex + std_w_ex*randn())') )
-			con[-1].connect(condition='i!=j', p=table[r][c])	
-			con[-1].delay = '(d_ex + std_d_ex*randn())'
-		# Inhibitory layer	
+				con.append( Synapses(p[c],p[r], """ w:volt """,on_pre = 'v_post += w') )
+				con[-1].connect(condition='i!=j', p=table[r][c])
+				con[-1].w = 'abs(w_ex + std_w_ex*randn())'
+			con[-1].delay = 'abs(d_ex + std_d_ex*randn())'
+		# Inhibitory layer		
 		else:
-			con.append( Synapses(p[c],p[r], on_pre = 'v_post += g*(w_ex + std_w_ex*randn())') )
-                        con[-1].connect(condition='i!=j', p=table[r][c])
-			con[-1].delay = '(d_in + std_d_in*randn())'
-
+			con.append( Synapses(p[c],p[r], """ w:volt """,on_pre = 'v_post -= g*w') )
+			con[-1].connect(condition='i!=j', p=table[r][c])
+			con[-1].w = 'abs(w_ex + std_w_ex*randn())'
+           		con[-1].delay = 'abs(d_in + std_d_in*randn())'
+			
 # Creanting BG inputs
 bg_in  = []
 for r in range(0, 8):
@@ -118,13 +121,69 @@ net = Network(collect())
 net.add(neurons,p, con, spikemon, bg_in)
 net.run(tsim,report='stdout')
 
-print mean(f_23e), mean(f_23i), mean(f_4e), mean(f_4i), mean(f_5e), mean(f_5i), mean(f_6e), mean(f_6i) 
+# Saving some values in files
+# Frequences 
+f1 = open('fperlayer.dat', 'w')
+f1.write(str(mean(f_23e)))
+f1.write("\n")
+f1.write(str(mean(f_23i)))
+f1.write("\n")
+f1.write(str(mean(f_4e)))
+f1.write("\n")
+f1.write(str(mean(f_4i)))
+f1.write("\n")
+f1.write(str(mean(f_5e)))
+f1.write("\n")
+f1.write(str(mean(f_5i)))
+f1.write("\n")
+f1.write(str(mean(f_6e)))
+f1.write("\n")
+f1.write(str(mean(f_6i)))
 
-plot(smon_net.t/ms, smon_net.i,'.k')
-xlabel('Time (ms)')
-ylabel('Neuron index');
-ylim(0,sum(n_layer))
-xlim(500,1000)
-plt.gca().invert_yaxis()
-savefig('raster_PDnet.png')
-show()
+# Saving some excitatory weights
+f2 = open('wex.dat', 'w')
+for wex in con[0].w[:5000]:
+	f2.write(str(wex/mV))
+	f2.write("\n")
+
+# Saving some inhibitory weights
+f3 = open('win.dat', 'w')
+for win in con[-1].w[:5000]:
+	f3.write(str(win/mV))
+	f3.write("\n")
+
+# Saving some excitatory delays
+f4 = open('dex.dat', 'w')
+for dex in con[0].delay[:5000]:
+	f4.write(str(dex/ms))
+	f4.write("\n")
+
+# Saving some inhibitory delays
+f5 = open('din.dat', 'w')
+for din in con[-1].delay[:5000]:
+	f5.write(str(din/ms))
+	f5.write("\n")
+
+# Saving raster plot
+f6 = open('raster.dat', 'w')
+for idx in range(0, len(smon_net.t)):
+	f6.write(str(smon_net.t[idx]/ms))
+	f6.write("\t")
+	f6.write(str(smon_net.i[idx]))
+	f6.write("\n")
+
+f1.close()
+f2.close()
+f3.close()
+f4.close()
+f5.close()
+f6.close()
+
+# plot(smon_net.t/ms, smon_net.i,'.k')
+# xlabel('Time (ms)')
+# ylabel('Neuron index');
+# ylim(0,sum(n_layer))
+# xlim(500,1000)
+# plt.gca().invert_yaxis()
+# savefig('raster_PDnet.png')
+# show()
