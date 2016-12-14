@@ -1,19 +1,24 @@
 # Potjans & Diesmann cortical microcircuit model implemented on Brian2.
 
-import matplotlib
-matplotlib.use('Agg')
-
 from brian2 import *
 import numpy as np
 #set_device('genn')
 
+matplotlib.use('Agg')
+
+# Seting the simulation to run with openmp
 set_device('cpp_standalone', directory='PD')
 prefs.devices.cpp_standalone.openmp_threads = 4
 
-defaultclock.dt = 0.1*ms
+###############################################################################
+# Simulation parameters
+###############################################################################
+defaultclock.dt = 0.1*ms    # Timestep of numerical integration method
+tsim = 1*second             # Time of simulation
 
-tsim = 1*second
-
+###############################################################################
+# Network parameters
+###############################################################################
 N = 80000 # Total population
 # Fraction of neurons in each layer
 #       2/3e   2/3i   4e     4i     5e     5i     6e     6i
@@ -39,6 +44,9 @@ table = [[0.1009,  0.1689, 0.0437, 0.0818, 0.0323, 0.,     0.0076, 0.    ],
         [0.0156,   0.0066, 0.0211, 0.0166, 0.0572, 0.0197, 0.0396, 0.2252],
         [0.0364,   0.001,  0.0034, 0.0005, 0.0277, 0.008,  0.0658, 0.144 ]]
 
+###############################################################################
+# Synapses parameters
+###############################################################################
 d_ex = 1.5*ms      # Excitatory delay
 std_d_ex = 0.75*ms # Std. Excitatory delay
 d_in = 0.75*ms      # Inhibitory delay
@@ -48,11 +56,12 @@ w_ex = rf*.35*mV      # Excitatory weight
 std_w_ex = rf*.0352*mV  # Standard deviation weigth
 g = 4.0                 # Inhibitory weight balance
 
-# Initial potential
-v0 = -58*mV
-std_v0 = 10*mV
-
+###############################################################################
 # Neuron model parameters
+###############################################################################
+# Initial potential
+v0 = -58*mV         # Initial membrane potential
+std_v0 = 10*mV      # Standard deviation for initial values of v0
 tau_m   = 10.0*ms   # Membrane time constant
 tau_ref = 2.0*ms    # Absolute refractory period
 tau_syn = 0.5*ms    # Post-synaptic current time constant
@@ -65,6 +74,9 @@ eqs = '''
 	I : amp
 '''
 
+###############################################################################
+# Creating neurons
+###############################################################################
 neurons = NeuronGroup(sum(n_layer), eqs, threshold='v>v_th', reset='v=v_r', method='linear', refractory=tau_ref)
 neurons.v = 'v0 + std_v0*randn()'
 neurons.I = 0.0*pA
@@ -77,7 +89,9 @@ for r in range(0, 8):
 	else:
 		p.append(neurons[nn_cum[r-1]:nn_cum[r]])
 
-# Creating connections
+###############################################################################
+# Creating synapse connections
+###############################################################################
 con = [] # Stores connections
 for c in range(0, 8):
     for r in range(0, 8):
@@ -99,17 +113,25 @@ for c in range(0, 8):
             con[-1].w = 'clip((w_ex + std_w_ex*randn()),w_ex*0.1, w_ex*10.0)'
             con[-1].delay = 'clip(d_in + std_d_in*randn(),0,d_in*10)'
 
-# Creating BG inputs
+###############################################################################
+# Creating poissonian background inputs
+###############################################################################
 bg_in  = []
 for r in range(0, 8):
 	bg_in.append( PoissonInput(p[r], 'v', bg_layer[r], 8*Hz, weight = w_ex ) )
 
-# Creating Spike Monitors
+###############################################################################
+# Creating spike monitors
+###############################################################################
 spikemon = []
 for r in range(0, 8):
 	spikemon.append( SpikeMonitor( p[r]) )
 
-# Layers frequences
+smon_net = SpikeMonitor(neurons)
+
+###############################################################################
+# Measuring frequencies by layer
+###############################################################################
 f_23e = spikemon[0].count;
 f_23i = spikemon[1].count;
 f_4e  = spikemon[2].count;
@@ -119,13 +141,16 @@ f_5i  = spikemon[5].count;
 f_6e  = spikemon[6].count;
 f_6i  = spikemon[7].count;
 
-smon_net = SpikeMonitor(neurons)
-
+###############################################################################
+# Running the simulation
+###############################################################################
 net = Network(collect())
-net.add(neurons,p, con, spikemon, bg_in)
+net.add(neurons,p, con, spikemon, bg_in)    # Adding objects to the simulation
 net.run(tsim,report='stdout')
 
+###############################################################################
 # Raster plot
+###############################################################################
 plot(smon_net.t/ms, smon_net.i,'.k', markersize=0.5)
 xlabel('Time (ms)')
 ylabel('Neuron index');
@@ -135,6 +160,9 @@ plt.gca().invert_yaxis()
 savefig('raster_PDnet.png',dpi=300)
 close()
 
+###############################################################################
+# Calculating the average frequency by layer
+###############################################################################
 freqs = []
 freqs.append(mean(f_23e)/tsim)
 freqs.append(mean(f_23i)/tsim)
