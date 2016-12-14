@@ -26,28 +26,9 @@ def phi_v(v,vt, vs, vr, gamma,r,delta):
 	elif v > vs:
 		return 1
 
-el_class = 'RS';  # Electrophysiologic class (RS or FS)
 
-if el_class == 'RS':
-	R = 10e-3*Gohm  # Resistence
-	tau = 10*ms     # Time constant
-	vr = -65*mV     # Reset potential
-	vt = -64.5*mV   # Threshold potential
-	vs = -37.5*mV   # Saturation potential
-	# phi_v parameters
-	gamma = 0.037/mV 
-	r = 1.0
-	delta = 0.0
-elif el_class == 'FS':
-	R = 16e-3*Gohm  # Resistence
-	tau = 10*ms     # Time constant
-	vr = -65*mV     # Reset potential
-	vt = -63.1*mV   # Threshold potential
-	vs = -50.50*mV   # Saturation potential
-	# phi_v parameters
-	gamma = 0.05/mV 
-	r = 1.0
-	delta = 0.3
+tau = 10*ms     # Time constant
+vr = -65*mV     # Reset potential
 
 tsim = 1*second
 num = 1000
@@ -55,10 +36,23 @@ num = 1000
 eqs = '''
 	dv/dt = ( -v + vr + R*I ) / tau : volt (unless refractory)
 	I : amp
+	R : ohm
+	vt : volt
+	vs : volt
+	gamma :1/volt
+	r :1
+	delta : 1
 '''
 
 n = NeuronGroup(num, eqs, threshold='rand() < phi_v(v,vt, vs, vr, gamma,r,delta)', reset='v=vr', method='euler', refractory=0.0*ms)
 n.v = vr
+n.R = 10e-3*Gohm  # Resistence
+n.vt = -64.5*mV   # Threshold potential
+n.vs = -37.5*mV   # Saturation potential
+# phi_v parameters
+n.gamma = 0.037/mV 
+n.r = 1.0
+n.delta = 0.0
 n.I = '300*pA * i / (num-1)'
 
 monitor = SpikeMonitor(n)
@@ -68,5 +62,3 @@ plot(n.I/pA, monitor.count / tsim)
 xlabel('I (pA)')
 ylabel('Firing rate (Hz)')
 show()
-
-
