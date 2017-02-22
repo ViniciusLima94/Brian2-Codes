@@ -31,7 +31,7 @@ n_layer = [int(round(n_pop)) for n_pop in n_layer]
 rf = 80000.0 / N
 nn_cum = cumsum(n_layer)
 # Background number per layer
-bg_layer = [1600, 1500 ,2100, 1900, 2000, 1900, 2900, 1850]
+bg_layer = [1600, 1500 ,2100, 1900, 2000, 1900, 2900, 2100]
 bg_layer = [bg_pop/rf for bg_pop in bg_layer]   # Reescaling
 # Prob. connection table
 
